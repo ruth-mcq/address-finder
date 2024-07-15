@@ -1,6 +1,12 @@
 import { TomTomApiClient } from "./maps-api";
 import { Address } from "./model";
 
+/**
+ * @param {string}  address - The partial address.
+ * @param {number} [limit=100] - The number of results to return.
+ * @param {number} [offset=0] - The number of results to skip.
+ * @returns {address[]} The list of address results.
+ */
 export async function getAutoCompleteDetails(
   address: string,
   limit: number = 100,
