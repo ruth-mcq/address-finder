@@ -1,7 +1,10 @@
 import { config } from "dotenv";
 import { describe } from "@jest/globals";
-import { getPlaceAutocomplete } from "../src/maps-api";
+import { TomTomApiClient } from "../src/maps-api";
 import { getAutoCompleteDetails } from "../src";
+import { UnauthorisedError, ValidationError } from "../src/model";
+import MockAdapter from "axios-mock-adapter";
+import axios from "axios";
 
 config();
 
@@ -38,7 +41,7 @@ describe("Tomtom Places E2E Tests", () => {
     });
 
     it("only results from Australia returned", async () => {
-      const res = await getAutoCompleteDetails("Charlotte Street");
+      const res = await getAutoCompleteDetails("Charlotte Street", 100);
       res.forEach((result) => {
         expect(result).toHaveProperty("country");
         expect(result["countryCode"]).toBe("AU");
@@ -79,31 +82,60 @@ describe("Tomtom Places E2E Tests", () => {
         expect(firstTenResults).not.toContainEqual(result);
       });
     });
-
-    it("fails for no api key", async () => {
-      const env = process.env;
-      process.env = {};
-      await expect(
-        getAutoCompleteDetails("Charlotte Street"),
-      ).rejects.toThrow();
-      process.env = env;
-    });
   });
 
   describe("getPlaceAutocomplete", () => {
+    const client = new TomTomApiClient(process.env.TOMTOM_API_KEY ?? "");
     it("handles no results", async () => {
-      const res = await getPlaceAutocomplete(
-        process.env.TOMTOM_API_KEY ?? "",
-        "asfasffasfasafsafs",
-        100,
-      );
+      const res = await client.getPlaceAutocomplete("asfasffasfasafsafs", 100);
       expect(res).toStrictEqual([]);
     });
 
+    it("fails with limit > 100", async () => {
+      const rejected = client.getPlaceAutocomplete("asfasffasfasafsafs", 101);
+      await expect(rejected).rejects.toThrow(ValidationError);
+      await expect(rejected).rejects.toThrow("limit must be between 1 and 100");
+    });
+
+    it("fails with limit < 1", async () => {
+      const error = client.getPlaceAutocomplete("asfasffasfasafsafs", 0);
+      await expect(error).rejects.toThrow(ValidationError);
+      await expect(error).rejects.toThrow("limit must be between 1 and 100");
+    });
+
+    it("fails with offset < 0", async () => {
+      const error = client.getPlaceAutocomplete("asfasffasfasafsafs", 100, -1);
+      await expect(error).rejects.toThrow(ValidationError);
+      await expect(error).rejects.toThrow("offset cannot be less than 0");
+    });
+
     it("handles error", async () => {
-      await expect(
-        getPlaceAutocomplete(process.env.TOMTOM_API_KEY ?? "", "", 10),
-      ).rejects.toThrow();
+      const invalidClient = new TomTomApiClient("");
+      const error = invalidClient.getPlaceAutocomplete("", 10);
+      await expect(error).rejects.toThrow(UnauthorisedError);
+    });
+
+    it("Should retry", async () => {
+      const validResponse = {
+        results: [],
+      };
+      const mock = new MockAdapter(axios);
+      mock.onGet().replyOnce(500, {});
+      mock.onGet().replyOnce(200, validResponse);
+      const res = await client.getPlaceAutocomplete("Charlotte Street", 100);
+      expect(res).toStrictEqual([]);
+    });
+  });
+  describe("ValidationError", () => {
+    it("generated correctly", async () => {
+      const expectedErrorMsg = "This is the error";
+      try {
+        throw new ValidationError(expectedErrorMsg);
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError);
+        expect(error.message).toBe(expectedErrorMsg);
+        expect(error.stack).toBeUndefined();
+      }
     });
   });
 });

@@ -1,4 +1,4 @@
-export type Address = {
+export interface Address {
   placeId: string;
   streetNumber?: string | undefined;
   streetName: string | undefined;
@@ -7,7 +7,29 @@ export type Address = {
   countryCode: string | undefined;
   country: string | undefined;
   freeformAddress: string | undefined;
-};
+}
+
+export class ValidationError extends Error {
+  name = "ValidationError";
+  constructor(message: string) {
+    super(message);
+    this.stack = undefined;
+  }
+}
+export class UnauthorisedError extends Error {
+  name = "UnauthorisedError";
+  constructor(message: string) {
+    super(message);
+    this.stack = undefined;
+  }
+}
+export class UnknownError extends Error {
+  name = "UnknownError";
+  constructor(message: string) {
+    super(message);
+    this.stack = undefined;
+  }
+}
 
 export interface MapApiResult {
   type: string;
