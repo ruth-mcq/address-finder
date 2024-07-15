@@ -2,7 +2,11 @@ import { config } from "dotenv";
 import { describe } from "@jest/globals";
 import { TomTomApiClient } from "../src/maps-api";
 import { getAutoCompleteDetails } from "../src";
-import { UnauthorisedError, ValidationError } from "../src/model";
+import {
+  AuthenticationError,
+  UnknownError,
+  ValidationError,
+} from "../src/model";
 import MockAdapter from "axios-mock-adapter";
 import axios from "axios";
 
@@ -82,6 +86,13 @@ describe("Tomtom Places E2E Tests", () => {
         expect(firstTenResults).not.toContainEqual(result);
       });
     });
+    it("fails for no api key", async () => {
+      const env = process.env;
+      process.env = {};
+      const rejected = getAutoCompleteDetails("Charlotte Street");
+      await expect(rejected).rejects.toThrow(AuthenticationError);
+      process.env = env;
+    });
   });
 
   describe("getPlaceAutocomplete", () => {
@@ -112,7 +123,7 @@ describe("Tomtom Places E2E Tests", () => {
     it("handles error", async () => {
       const invalidClient = new TomTomApiClient("");
       const error = invalidClient.getPlaceAutocomplete("", 10);
-      await expect(error).rejects.toThrow(UnauthorisedError);
+      await expect(error).rejects.toThrow(AuthenticationError);
     });
 
     it("Should retry", async () => {
@@ -121,18 +132,81 @@ describe("Tomtom Places E2E Tests", () => {
       };
       const mock = new MockAdapter(axios);
       mock.onGet().replyOnce(500, {});
+      mock.onGet().replyOnce(429, {});
       mock.onGet().replyOnce(200, validResponse);
       const res = await client.getPlaceAutocomplete("Charlotte Street", 100);
       expect(res).toStrictEqual([]);
     });
+
+    it("Should retry only 3 times", async () => {
+      const validResponse = {
+        results: [],
+      };
+      const mock = new MockAdapter(axios);
+      mock.onGet().replyOnce(500, {});
+      mock.onGet().replyOnce(500, {});
+      mock.onGet().replyOnce(500, {});
+      mock.onGet().replyOnce(500, {});
+      mock.onGet().replyOnce(200, validResponse);
+      const error = client.getPlaceAutocomplete("CharlotteStreet", 10);
+      await expect(error).rejects.toThrow(UnknownError);
+    });
+
+    it("Should not retry 4XX", async () => {
+      const validResponse = {
+        results: [],
+      };
+      const mock = new MockAdapter(axios);
+      mock.onGet().replyOnce(400, {});
+      mock.onGet().replyOnce(200, validResponse);
+      const badRequestError = client.getPlaceAutocomplete(
+        "CharlotteStreet",
+        10,
+      );
+      await expect(badRequestError).rejects.toThrow(UnknownError);
+      mock.reset();
+      mock.onGet().replyOnce(403, {});
+      mock.onGet().replyOnce(200, validResponse);
+      const forbiddenError = client.getPlaceAutocomplete("CharlotteStreet", 10);
+      await expect(forbiddenError).rejects.toThrow(AuthenticationError);
+
+      mock.reset();
+      mock.onGet().replyOnce(401, {});
+      mock.onGet().replyOnce(200, validResponse);
+      const unauthorisedError = client.getPlaceAutocomplete(
+        "CharlotteStreet",
+        10,
+      );
+      await expect(unauthorisedError).rejects.toThrow(AuthenticationError);
+    });
   });
-  describe("ValidationError", () => {
-    it("generated correctly", async () => {
+  describe("Custom Errors", () => {
+    it("ValidationError", async () => {
       const expectedErrorMsg = "This is the error";
       try {
         throw new ValidationError(expectedErrorMsg);
       } catch (error) {
         expect(error).toBeInstanceOf(ValidationError);
+        expect(error.message).toBe(expectedErrorMsg);
+        expect(error.stack).toBeUndefined();
+      }
+    });
+    it("AuthenticationError", async () => {
+      const expectedErrorMsg = "This is the error";
+      try {
+        throw new AuthenticationError(expectedErrorMsg);
+      } catch (error) {
+        expect(error).toBeInstanceOf(AuthenticationError);
+        expect(error.message).toBe(expectedErrorMsg);
+        expect(error.stack).toBeUndefined();
+      }
+    });
+    it("UnknownError", async () => {
+      const expectedErrorMsg = "This is the error";
+      try {
+        throw new UnknownError(expectedErrorMsg);
+      } catch (error) {
+        expect(error).toBeInstanceOf(UnknownError);
         expect(error.message).toBe(expectedErrorMsg);
         expect(error.stack).toBeUndefined();
       }

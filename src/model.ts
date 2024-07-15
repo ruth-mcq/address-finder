@@ -16,8 +16,8 @@ export class ValidationError extends Error {
     this.stack = undefined;
   }
 }
-export class UnauthorisedError extends Error {
-  name = "UnauthorisedError";
+export class AuthenticationError extends Error {
+  name = "AuthenticationError";
   constructor(message: string) {
     super(message);
     this.stack = undefined;

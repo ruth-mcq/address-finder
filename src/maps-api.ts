@@ -2,7 +2,7 @@ import axios from "axios";
 import {
   Address,
   MapApiResult,
-  UnauthorisedError,
+  AuthenticationError,
   UnknownError,
   ValidationError,
 } from "./model";
@@ -28,7 +28,7 @@ export class TomTomApiClient implements IMapApi {
       },
       function (error) {
         //already handled unauthroised so just return
-        if (error instanceof UnauthorisedError) {
+        if (error instanceof AuthenticationError) {
           return Promise.reject(error);
         }
         //unauthorised access
@@ -39,7 +39,7 @@ export class TomTomApiClient implements IMapApi {
             (error.status === 403 || error.status === 401))
         ) {
           return Promise.reject(
-            new UnauthorisedError(
+            new AuthenticationError(
               "Unauthorised access to address data. Check your API Key.",
             ),
           );
